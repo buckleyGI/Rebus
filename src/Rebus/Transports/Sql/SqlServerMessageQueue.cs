@@ -110,8 +110,8 @@ namespace Rebus.Transports.Sql
                 using (var command = connection.CreateCommand())
                 {
                     command.CommandText = string.Format(@"insert into [{0}] 
-                                                            ([recipient], [headers], [label], [body], [priority]) 
-                                                            values (@recipient, @headers, @label, @body, @priority)",
+                                                            ([recipient], [headers], [label], [body],[bodyAsString], [priority]) 
+                                                            values (@recipient, @headers, @label, @body,@bodyAsString, @priority)",
                                                         messageTableName);
 
                     var label = message.Label ?? "(no label)";
@@ -122,7 +122,8 @@ namespace Rebus.Transports.Sql
                     command.Parameters.Add("recipient", SqlDbType.NVarChar, 200).Value = destinationQueueName;
                     command.Parameters.Add("headers", SqlDbType.NVarChar, Max).Value = DictionarySerializer.Serialize(message.Headers);
                     command.Parameters.Add("label", SqlDbType.NVarChar, Max).Value = label;
-                    command.Parameters.Add("body", SqlDbType.VarBinary, Max).Value = message.Body;
+                    command.Parameters.Add("body", SqlDbType.VarBinary, Max).Value = (object)message.Body ?? DBNull.Value;
+                    command.Parameters.Add("bodyAsString", SqlDbType.NVarChar, Max).Value = (object) message.BodyAsString ??  DBNull.Value;
                     command.Parameters.Add("priority", SqlDbType.TinyInt, 1).Value = priority;
 
                     command.ExecuteNonQuery();
@@ -206,7 +207,7 @@ namespace Rebus.Transports.Sql
 
                         selectCommand.CommandText =
                             string.Format(@"
-                                    select top 1 [seq], [headers], [label], [body], [priority]
+                                    select top 1 [seq], [headers], [label], [body], [bodyAsString], [priority]
 		                                from [{0}]
                                         with (updlock, readpast, rowlock)
 		                                where [recipient] = @recipient
@@ -235,6 +236,7 @@ namespace Rebus.Transports.Sql
                                 var headers = reader["headers"];
                                 var label = reader["label"];
                                 var body = reader["body"];
+                                var bodyAsString = reader["bodyAsString"];
                                 seq = (long) reader["seq"];
                                 priority = (byte) reader["priority"];
 
@@ -247,7 +249,9 @@ namespace Rebus.Transports.Sql
                                             Id = messageId,
                                             Label = (string) label,
                                             Headers = headersDictionary,
-                                            Body = (byte[]) body,
+                                            Body = body == DBNull.Value ? null : (byte[])body,
+                                            BodyAsString = bodyAsString == DBNull.Value ? null : (string)bodyAsString,
+
                                         };
 
                                 log.Debug("Received message with ID {0} from logical queue {1}.{2}",
@@ -364,6 +368,8 @@ namespace Rebus.Transports.Sql
 
                 log.Info("Table '{0}' does not exist - it will be created now", messageTableName);
 
+                var guidToMakePrimaryKeyUnique = Guid.NewGuid().ToString();
+
                 using (var command = connection.Connection.CreateCommand())
                 {
                     command.Transaction = connection.Transaction;
@@ -375,15 +381,16 @@ CREATE TABLE [dbo].[{0}](
 	[priority] [tinyint] NOT NULL,
 	[label] [nvarchar](max) NOT NULL,
 	[headers] [nvarchar](max) NOT NULL,
-	[body] [varbinary](max) NOT NULL,
-    CONSTRAINT [PK_{0}] PRIMARY KEY CLUSTERED 
+	[body] [varbinary](max)  NULL, 
+	[bodyAsString] [nvarchar](max) NULL,
+    CONSTRAINT [PK_{0}_{1}] PRIMARY KEY CLUSTERED 
     (
 	    [recipient] ASC,
 	    [priority] ASC,
 	    [seq] ASC
     ) WITH (PAD_INDEX = OFF, STATISTICS_NORECOMPUTE = OFF, IGNORE_DUP_KEY = OFF, ALLOW_ROW_LOCKS = ON, ALLOW_PAGE_LOCKS = OFF)
 )
-", messageTableName);
+", messageTableName, guidToMakePrimaryKeyUnique);
 
                     command.ExecuteNonQuery();
                 }

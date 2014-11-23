@@ -38,6 +38,8 @@ namespace Rebus
         /// </summary>
         public byte[] Body { get; set; }
 
+        public string BodyAsString { get; set; }
+
         /// <summary>
         /// String label used if the underlying message queue supports it.
         /// </summary>

@@ -50,6 +50,12 @@ namespace Rebus.Configuration
             return this;
         }
 
+        public JsonSerializationOptions StoreBodyAsText()
+        {
+            jsonMessageSerializer.StoreBodyAsString = true;
+            return this;
+        }
+
         /// <summary>
         /// Configure the serializer to serialize the enums as string.
         /// </summary>

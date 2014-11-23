@@ -58,6 +58,8 @@ namespace Rebus.Serialization.Json
             settings.Binder = binder;
         }
 
+        public bool StoreBodyAsString { get; set; }
+
         /// <summary>
         /// Serializes the transport message <see cref="Message"/> using JSON.NET and wraps it in a <see cref="TransportMessageToSend"/>
         /// </summary>
@@ -72,12 +74,23 @@ namespace Rebus.Serialization.Json
                 headers[Headers.ContentType] = JsonContentTypeName;
                 headers[Headers.Encoding] = encodingToUse.WebName;
 
-                return new TransportMessageToSend
-                           {
-                               Body = encodingToUse.GetBytes(messageAsString),
-                               Headers = headers,
-                               Label = message.GetLabel(),
-                           };
+                var transportMessageToSend = new TransportMessageToSend
+                {
+                    Headers = headers,
+                    Label = message.GetLabel(),
+                };
+
+                if (StoreBodyAsString)
+                {
+                    transportMessageToSend.BodyAsString = messageAsString;
+                }
+                else
+                {
+                    transportMessageToSend.Body = encodingToUse.GetBytes(messageAsString);
+                }
+
+
+                return transportMessageToSend;
             }
         }
 
@@ -93,7 +106,8 @@ namespace Rebus.Serialization.Json
                 var headers = transportMessage.Headers.Clone();
                 var encodingToUse = GetEncodingOrThrow(headers);
 
-                var serializedTransportMessage = encodingToUse.GetString(transportMessage.Body);
+                string serializedTransportMessage = transportMessage.BodyAsString ?? encodingToUse.GetString(transportMessage.Body);
+
                 try
                 {
                     var messages = (object[]) JsonConvert.DeserializeObject(serializedTransportMessage, settings);

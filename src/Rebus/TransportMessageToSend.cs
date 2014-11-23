@@ -29,6 +29,8 @@ namespace Rebus
         /// Message body. Should not contain any header information.
         /// </summary>
         public byte[] Body { get; set; }
+        
+        public string BodyAsString { get; set; }
 
         /// <summary>
         /// String label to use if the underlying message queue supports it.
